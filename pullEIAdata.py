@@ -1,4 +1,5 @@
 import requests as r
+import multiprocessing
 import json
 import pandas as pd
 import re
@@ -30,6 +31,13 @@ if __name__ == "__main__":
     #pull data for all types, all plants, all states - TABLE 3
 
     #pull all state IDs into one lookup
+    from datetime import datetime
+    startTime = datetime.now()
+
+    #Python 3: 
+    print(datetime.now() - startTime)
+
+
     states_call =  'http://api.eia.gov/category/?api_key=YOUR_API_KEY_HERE&category_id=1017'
     state_categories = get_data(states_call)
     state_categories = state_categories['category']['childcategories']
@@ -102,18 +110,39 @@ if __name__ == "__main__":
 
     series_data_file = 'series-data.txt'
     series_data = {}
-
+    pool_outputs = {}
+    
+    def get_series_data(call):
+        #i=1
+        #for call in calls:
+        print('API CALL {0}'.format(call))
+        try:
+            series_data[call] = get_data(series_temp_call.replace('####', call))
+        except:
+            series_data[call] = 'REST CALL FAILED'
+        #i=i+1
+        #print(series_data)
+        return series_data
+    #print(plant_data_calls)
     if os.path.exists(series_data_file):
             with open(series_data_file, 'r') as sfile:
-                series_data = json.load(sfile)
+                pool_outputs = json.load(sfile)
     else:
-        i=1
-        for call in plant_data_calls:
-            print('API CALL {0}, {1} of {2}'.format(call,i,len(plant_data_calls)))
-            series_data[call] = get_data(series_temp_call.replace('####', call))
-            i=i+1
-        #print(series_data)
-        save_json(series_data, series_data_file)
+        #multiprocessing.set_start_method('spawn')
+        pool = multiprocessing.Pool(processes=6)
+        #pool_outputs = pool.map_async(get_series_data, plant_data_calls)
+        pool_outputs = pool.map_async(get_series_data, plant_data_calls).get()
+
+        pool.close()
+        pool.join()
+        save_json(pool_outputs, series_data_file)
+        # i=1
+        # for call in plant_data_calls:
+        #     print('API CALL {0}, {1} of {2}'.format(call,i,len(plant_data_calls)))
+        #     series_data[call] = get_data(series_temp_call.replace('####', call))
+        #     i=i+1
+        # #print(series_data)
+        # save_json(series_data, series_data_file)
     
     #print(series_data["ELEC.PLANT.CONS_EG_BTU.10173-ALL-ALL.A"])
 
@@ -123,7 +152,7 @@ if __name__ == "__main__":
     name_temp = []
     data_temp = []
     series_df = pd.DataFrame()
-    print("length of series data; ", len(series_data))
+    print("length of series data; ", len(pool_outputs))
     for row in series_data:
         #print(series_data[row])
         series_temp.append(row)
@@ -134,4 +163,7 @@ if __name__ == "__main__":
     series_df['data'] = data_temp
 
     series_df.to_csv('series_data.csv',index=False)
+    
+    #Python 3: 
+    print(datetime.now() - startTime)
     
