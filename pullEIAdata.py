@@ -60,11 +60,13 @@ if __name__ == "__main__":
     id_temp = []
     plant_temp = []
     state_temp = []
+    stateName = 'Hawaii'
     for state in stateIDs.values(): 
-        for i, plant in enumerate(plants_by_state[state]):    
-            id_temp.append(plants_by_state[state][i]['category_id'])
-            plant_temp.append(plants_by_state[state][i]['name'])
-            state_temp.append(state)
+        if state == stateName:
+            for i, plant in enumerate(plants_by_state[state]):    
+                id_temp.append(plants_by_state[state][i]['category_id'])
+                plant_temp.append(plants_by_state[state][i]['name'])
+                state_temp.append(state)
     plant_df['State'] = state_temp
     plant_df['category_id'] = id_temp
     plant_df['Plant Name'] = plant_temp
@@ -75,10 +77,11 @@ if __name__ == "__main__":
     plant_data = {}
     plant_temp_call = 'http://api.eia.gov/category/?api_key=YOUR_API_KEY_HERE&category_id=####'
 
-    us_plants_file = 'plant-data.txt'
+    us_plants_file = 'hawaiii-plant-data.txt'
     if os.path.exists(us_plants_file):
         with open(us_plants_file, 'r') as jfile:
             plant_data = json.load(jfile)
+            print('loading json file')
     else: 
         for cat in plant_df['category_id']:
             plant_data[cat] = get_data(temp_call.replace('####',str(cat)))
@@ -104,7 +107,7 @@ if __name__ == "__main__":
     save_json(plants_by_state, 'usplants.json') #save json data for later
     states_df = pd.read_json('states.json')
     states_df.to_csv('states.csv')
-    plant_df.to_csv('us-plants.csv')
+    plant_df.to_csv('{0}_plants.csv'.format(stateName))
 
     series_temp_call = 'http://api.eia.gov/series/?api_key=YOUR_API_KEY_HERE&series_id=####'
 
@@ -124,10 +127,13 @@ if __name__ == "__main__":
         #print(series_data)
         return series_data
     #print(plant_data_calls)
+    print('loading series json')
     if os.path.exists(series_data_file):
             with open(series_data_file, 'r') as sfile:
                 pool_outputs = json.load(sfile)
+                print("json loaded")
     else:
+        print('no json found, starting pool.')
         #multiprocessing.set_start_method('spawn')
         pool = multiprocessing.Pool(processes=6)
         #pool_outputs = pool.map_async(get_series_data, plant_data_calls)
@@ -136,6 +142,7 @@ if __name__ == "__main__":
         pool.close()
         pool.join()
         save_json(pool_outputs, series_data_file)
+        print('pooling complete')
         # i=1
         # for call in plant_data_calls:
         #     print('API CALL {0}, {1} of {2}'.format(call,i,len(plant_data_calls)))
@@ -153,17 +160,21 @@ if __name__ == "__main__":
     data_temp = []
     series_df = pd.DataFrame()
     print("length of series data; ", len(pool_outputs))
-    for row in series_data:
-        #print(series_data[row])
-        series_temp.append(row)
-        name_temp.append(series_data[row]['series'][0]['name'])
-        data_temp.append(series_data[row]['series'][0]['data'])
+    for series_data in pool_outputs:
+        for row in series_data:
+            print(series_data[row])
+            series_temp.append(row)
+            name_temp.append(series_data[row]['series'][0]['name'])
+            data_temp.append(series_data[row]['series'][0]['data'])
     series_df['series_id'] = series_temp
     series_df['name'] = name_temp
     series_df['data'] = data_temp
 
-    series_df.to_csv('series_data.csv',index=False)
+    series_df.to_csv('{0}_series_data.csv'.format(stateName),index=False)
     
     #Python 3: 
     print(datetime.now() - startTime)
     
+#todo
+#convert series data csv to feather file
+#get hawaii series data in mongo db, get plant data and series data types in there as well
